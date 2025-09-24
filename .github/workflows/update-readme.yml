@@ -19,3 +19,5 @@ jobs:
 
       - name: Update README with activity
         uses: jamesgeorge007/github-activity-readme@v0.4.1
+        with:
+            GH_TOKEN: ${{ secrets.good }}
