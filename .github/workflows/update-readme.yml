@@ -5,7 +5,6 @@ on:
     - cron: "0 * * * *"   # 每小時執行一次
   workflow_dispatch:       # 可以手動觸發
 
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,6 +16,9 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Update README with activity
-        uses: jamesgeorge007/github-activity-readme@v0.4.1
+        uses: jamesgeorge007/github-activity-readme@v0.4.5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 必須用 env
         with:
-          GH_TOKEN: ${{ secrets.good }}
+          COMMIT_MSG: "chore: update GitHub activity"
+          MAX_LINES: 10
