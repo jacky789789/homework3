@@ -4,8 +4,7 @@ on:
   schedule:
     - cron: "0 * * * *"   # 每小時執行一次
   workflow_dispatch:       # 可以手動觸發
-  push:
-    branches: [ main ]     # 每次 main 有更新也會觸發
+
 
 jobs:
   build:
