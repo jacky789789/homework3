@@ -2,16 +2,11 @@ name: Update README with Recent Activity
 
 on:
   schedule:
-    - cron: "0 * * * *"   # 每小時執行一次（UTC）
+    - cron: "0 * * * *"
   workflow_dispatch:
-  # （選配）當你調整這支 workflow 時自動跑一次，方便驗證
-  push:
-    branches: [ main, master ]
-    paths:
-      - ".github/workflows/update-readme.yml"
 
 permissions:
-  contents: write   # 僅開必要權限（最小權限）
+  contents: write
 
 concurrency:
   group: update-readme
@@ -20,15 +15,18 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Update README with activity
         uses: jamesgeorge007/github-activity-readme@v0.4.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          COMMIT_MSG: "chore: update GitHub activity [skip ci]"
+          GH_USERNAME: jacky789789
+          COMMIT_NAME: github-actions[bot]
+          COMMIT_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          TARGET_FILE: README.md
           MAX_LINES: 10
+          COMMIT_MSG: "chore: update GitHub activity [skip ci]"
+          EMPTY_COMMIT_MSG: ":memo: empty commit to keep workflow active after 60 days of no activity"
