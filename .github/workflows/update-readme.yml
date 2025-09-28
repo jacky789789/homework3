@@ -1,13 +1,12 @@
-name: Update README with Recent Activity
+name: Update README (user activity)
 
 on:
   schedule:
-    - cron: "23 2 * * *"   # 每日固定時間跑就好，別每小時洗版
+    - cron: "23 2 * * *"   # 每日固定時間（UTC）；台北 +8 可自行換
   workflow_dispatch:
 
 permissions:
-  contents: write          # 需要回寫 README
-  # metadata: read         # 通常預設就是 read，不必特別寫
+  contents: write
 
 concurrency:
   group: update-readme
@@ -16,20 +15,104 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
+    env:
+      GH_USERNAME: jacky789789
+      MAX_ITEMS: "10"
     steps:
       - uses: actions/checkout@v4
 
-      - name: Update README with activity
-        uses: jamesgeorge007/github-activity-readme@v0.4.5
-        env:
-          # 用內建 token，避免 fine-grained PAT 打不到 user 端點
-          GITHUB_TOKEN: ${{ github.token }}
+      - name: Generate activity markdown (via GitHub API)
+        id: gen
+        uses: actions/github-script@v7
         with:
-          GH_USERNAME: jacky789789
-          COMMIT_NAME: github-actions[bot]
-          COMMIT_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
-          TARGET_FILE: README.md
-          MAX_LINES: 10
-          COMMIT_MSG: "chore(readme): update GitHub activity [skip ci]"
-          # 建議先關掉 keep-alive 空提交，避免污染歷史
-          # EMPTY_COMMIT_MSG: ":memo: keep workflow alive"
+          github-token: ${{ github.token }}   # 讀使用者公開事件用這個最穩
+          script: |
+            const user = process.env.GH_USERNAME;
+            const maxItems = parseInt(process.env.MAX_ITEMS, 10) || 10;
+
+            // 取使用者公開事件
+            const events = await github.paginate(
+              github.rest.activity.listPublicEventsForUser,
+              { username: user, per_page: 100 }
+            );
+
+            // 篩常見事件類型
+            const allowed = new Set([
+              'PullRequestEvent', 'IssuesEvent', 'IssueCommentEvent', 'ReleaseEvent'
+            ]);
+
+            const md = [];
+            let count = 0;
+            for (const e of events) {
+              if (!allowed.has(e.type)) continue;
+              if (count >= maxItems) break;
+
+              const when = e.created_at;
+              if (e.type === 'PullRequestEvent') {
+                const pr = e.payload.pull_request;
+                md.push(`- PR ${e.payload.action.toUpperCase()} · #${pr.number} [${pr.title}](${pr.html_url}) (${when})`);
+                count++;
+              } else if (e.type === 'IssuesEvent') {
+                const is = e.payload.issue;
+                md.push(`- ISSUE ${e.payload.action.toUpperCase()} · #${is.number} [${is.title}](${is.html_url}) (${when})`);
+                count++;
+              } else if (e.type === 'IssueCommentEvent') {
+                const is = e.payload.issue;
+                md.push(`- COMMENT · #${is.number} [${is.title}](${is.html_url}) (${when})`);
+                count++;
+              } else if (e.type === 'ReleaseEvent') {
+                const r = e.payload.release;
+                md.push(`- RELEASE · [${r.tag_name}](${r.html_url}) (${when})`);
+                count++;
+              }
+            }
+
+            const header = `_Generated: ${new Date().toISOString()} (last ${maxItems} items)_\n`;
+            const content = (md.length ? [header, ...md] : [header, '- (no recent activity)']).join('\n');
+            core.setOutput('content', content);
+
+      - name: Update README after marker
+        id: patch
+        run: |
+          node -e '
+            const fs = require("fs");
+            const path = "README.md";
+            const marker = "<!--START_SECTION:activity-->";
+            const payload = process.env.MD + "\n";
+
+            if (!fs.existsSync(path)) {
+              console.error("README.md not found"); process.exit(2);
+            }
+            let txt = fs.readFileSync(path, "utf8");
+            if (!txt.includes(marker)) {
+              console.error("Marker not found: " + marker); process.exit(3);
+            }
+
+            // 把 marker 後面整段（直到檔案結尾或下一個 marker）替換成「marker + 兩個換行 + 內容」
+            const parts = txt.split(marker);
+            const head = parts[0] + marker + "\n\n";
+            const tail = parts[1] || "";
+            // 如果 tail 有我們上次產生的內容，就只覆蓋第一段落到下一個空行/標題
+            const nextBreak = tail.indexOf("\n## ");
+            const newTxt = head + payload + (nextBreak >= 0 ? tail.slice(nextBreak) : "");
+            if (newTxt !== txt) {
+              fs.writeFileSync(path, newTxt, "utf8");
+              console.log("README patched.");
+            } else {
+              console.log("No content change.");
+            }
+          '
+        env:
+          MD: ${{ steps.gen.outputs.content }}
+
+      - name: Commit & push if changed (idempotent)
+        run: |
+          if ! git diff --quiet README.md; then
+            git config user.email "actions@users.noreply.github.com"
+            git config user.name "github-actions[bot]"
+            git add README.md
+            git commit -m "chore(readme): update user activity [skip ci]"
+            git push
+          else
+            echo "No README changes to commit."
+          fi
