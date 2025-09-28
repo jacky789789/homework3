@@ -2,12 +2,12 @@ name: Update README with Recent Activity
 
 on:
   schedule:
-    - cron: "23 2 * * *"   # 每日台北時間 10:23，可自行調整
+    - cron: "23 2 * * *"   # 每日固定時間跑就好，別每小時洗版
   workflow_dispatch:
 
-# 最小權限
 permissions:
-  contents: write
+  contents: write          # 需要回寫 README
+  # metadata: read         # 通常預設就是 read，不必特別寫
 
 concurrency:
   group: update-readme
@@ -19,19 +19,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 建議 pin 到 release 對應的 commit SHA（如下僅示意用 v0.4.5）
       - name: Update README with activity
         uses: jamesgeorge007/github-activity-readme@v0.4.5
         env:
-          # 作業要求使用自建 PAT（REPO_TOKEN）
-          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
+          # 用內建 token，避免 fine-grained PAT 打不到 user 端點
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           GH_USERNAME: jacky789789
           COMMIT_NAME: github-actions[bot]
           COMMIT_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
           TARGET_FILE: README.md
           MAX_LINES: 10
-          COMMIT_MSG: "chore(readme): update recent activity [skip ci]"
-          # 建議先關掉 keep-alive，避免空 commit 汙染歷史
-          # 空窗期擔心被停用再打開
-          # EMPTY_COMMIT_MSG: ":memo: empty commit to keep workflow active after 60 days of no activity"
+          COMMIT_MSG: "chore(readme): update GitHub activity [skip ci]"
+          # 建議先關掉 keep-alive 空提交，避免污染歷史
+          # EMPTY_COMMIT_MSG: ":memo: keep workflow alive"
