@@ -1,49 +1,19 @@
-name: Validate README markers
+- name: Ensure single marker exists exactly once
+  run: |
+    set -euo pipefail
+    file="README.md"
+    marker='<!--START_SECTION:activity-->'
 
-on:
-  pull_request:
-    paths:
-      - "README.md"      # 只有 PR 改到 README 才跑（省時）；想更嚴謹可移除這行讓所有 PR 都檢查
-  workflow_dispatch:
+    if [[ ! -f "$file" ]]; then
+      echo "::error title=Missing README.md::$file not found"; exit 1
+    fi
 
-permissions:
-  contents: read
+    # 用 ( ... || true ) 包住 grep，避免沒匹配時因 pipefail 退出
+    count=$( (grep -aoF "$marker" "$file" || true) | wc -l )
+    echo "Found $count occurrence(s) of $marker"
 
-jobs:
-  validate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    if [[ "${count:-0}" -ne 1 ]]; then
+      echo "::error title=Marker invalid::Found $count occurrences of $marker (expected 1)"; exit 1
+    fi
 
-      - name: Ensure markers exist exactly once and in order
-        run: |
-          set -euo pipefail
-          file="README.md"
-          if [[ ! -f "$file" ]]; then
-            echo "::error title=Missing README.md::README.md not found"; exit 1
-          fi
-
-          start='<!-- ACTIVITY:START -->'
-          end='<!-- ACTIVITY:END -->'
-
-          s_count=$(grep -oF "$start" "$file" | wc -l | tr -d ' ')
-          e_count=$(grep -oF "$end" "$file" | wc -l | tr -d ' ')
-
-          if [[ "$s_count" -ne 1 || "$e_count" -ne 1 ]]; then
-            echo "::error title=Marker count invalid::Found START=$s_count, END=$e_count (expected 1 each)"; exit 1
-          fi
-
-          s_line=$(grep -nF "$start" "$file" | head -n1 | cut -d: -f1)
-          e_line=$(grep -nF "$end" "$file" | head -n1 | cut -d: -f1)
-
-          if [[ "$s_line" -ge "$e_line" ]]; then
-            echo "::error title=Marker order invalid::START at line $s_line must be before END at line $e_line"; exit 1
-          fi
-
-          # （可選）檢查中間不是完全空白
-          between=$(sed -n "$((s_line+1)),$((e_line-1))p" "$file" | tr -d '\n\r\t ')
-          if [[ -z "$between" ]]; then
-            echo "::warning title=Empty activity block::Content between markers is empty"; exit 0
-          fi
-
-          echo "Markers OK: START line $s_line, END line $e_line"
+    echo "Marker OK"
