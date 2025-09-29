@@ -1,19 +1,45 @@
-- name: Ensure single marker exists exactly once
-  run: |
-    set -euo pipefail
-    file="README.md"
-    marker='<!--START_SECTION:activity-->'
+name: Validate README single marker
 
-    if [[ ! -f "$file" ]]; then
-      echo "::error title=Missing README.md::$file not found"; exit 1
-    fi
+on:
+  pull_request:
+    paths:
+      - "README.md"          # 只有改到 README.md 才檢查；想更嚴格可移除此行
+  workflow_dispatch:
 
-    # 用 ( ... || true ) 包住 grep，避免沒匹配時因 pipefail 退出
-    count=$( (grep -aoF "$marker" "$file" || true) | wc -l )
-    echo "Found $count occurrence(s) of $marker"
+permissions:
+  contents: read
 
-    if [[ "${count:-0}" -ne 1 ]]; then
-      echo "::error title=Marker invalid::Found $count occurrences of $marker (expected 1)"; exit 1
-    fi
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-    echo "Marker OK"
+      # （選用）除錯：列出 README 內是否有該標記，方便排錯
+      - name: Debug markers in README
+        run: |
+          set -e
+          echo "---- search markers ----"
+          grep -n "<!--START_SECTION:activity-->" README.md || true
+          echo "------------------------"
+
+      # 驗證：該單一標記必須存在且只出現一次
+      - name: Ensure single marker exists exactly once
+        run: |
+          set -euo pipefail
+          file="README.md"
+          marker='<!--START_SECTION:activity-->'
+
+          if [[ ! -f "$file" ]]; then
+            echo "::error title=Missing README.md::$file not found"; exit 1
+          fi
+
+          # 用 ( ... || true ) 包住 grep，避免沒匹配時在 pipefail 下直接退出
+          count=$( (grep -aoF "$marker" "$file" || true) | wc -l | tr -d ' ')
+          echo "Found $count occurrence(s) of $marker"
+
+          if [[ "${count:-0}" -ne 1 ]]; then
+            echo "::error title=Marker invalid::Found $count occurrences of $marker (expected 1)"; exit 1
+          fi
+
+          echo "Marker OK"
